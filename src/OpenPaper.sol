@@ -19,10 +19,10 @@ contract OpenPaper is ERC721, AccessControl {
     mapping(address => bool) public signed;
     bool public paperCreated = false;
     uint256 public buyers = _tokenIdCounter.current();
-    uint256 public upvotes = 0;
-    uint256 public paperPrice;
+    uint32 public upvotes = 0;
+    uint8 public paperPrice;
 
-    constructor(string memory _title, address[] memory _authors, string memory _contentURI, uint256 _paperPrice)
+    constructor(string memory _title, address[] memory _authors, string memory _contentURI, uint8 _paperPrice)
         ERC721("OpenPaper", "OPP")
     {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -41,6 +41,7 @@ contract OpenPaper is ERC721, AccessControl {
 
     function addAdmin(address _newadmin) public onlyRole(DEFAULT_ADMIN_ROLE) {
         _grantRole(DEFAULT_ADMIN_ROLE, _newadmin);
+        authors.push(_newadmin);
     }
 
     function sign() public onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -49,25 +50,28 @@ contract OpenPaper is ERC721, AccessControl {
 
     function createPaper() public onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
         // Only mint the token if all authors have signed
-        for (uint256 i = 0; i < authors.length; i++) {
+        for (uint64 i = 0; i < authors.length; i++) {
             require(signed[authors[i]], "Not all authors have signed");
         }
 
-        // If all authors have signed, mint the token to all authors
-        for (uint256 i = 0; i < authors.length; i++) {
-            _safeMint(authors[i], _tokenIdCounter.current());
-            _tokenIdCounter.increment();
-            paperCreated = true;
+        // If all authors have signed, mint just one token to all authors
+
+        for (uint64 i = 0; i < authors.length; i++) {
+            if (balanceOf(authors[i]) == 0) {
+                _safeMint(authors[i], _tokenIdCounter.current());
+                _tokenIdCounter.increment();
+            }
         }
         return paperCreated;
     }
 
-    function buyPaper(address to) public payable {
+    function buyPaper() public payable {
         require(createPaper(), "Paper not created");
         require(msg.value >= paperPrice, "Not enough ETH sent");
-        _safeMint(to, _tokenIdCounter.current());
+        _safeMint(msg.sender, _tokenIdCounter.current());
     }
 
+    // TODO: If an address already voted, don't let them vote again
     function upvotePaper() public {
         upvotes++;
     }
@@ -75,8 +79,7 @@ contract OpenPaper is ERC721, AccessControl {
     function withdrawFunds() public onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 balance = address(this).balance;
         uint256 amount = balance / authors.length;
-        for (uint256 i = 0; i < authors.length; i++) {
-            payable(authors[i]).transfer(amount);
+        for (uint64 i = 0; i < authors.length; i++) {
             (bool tranferTx,) = authors[i].call{value: amount}("");
             if (!tranferTx) {
                 revert("Transfer failed");
