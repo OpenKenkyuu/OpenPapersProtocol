@@ -17,6 +17,7 @@ contract OpenPaper is ERC721, AccessControl {
     address[] public authors;
 
     mapping(address => bool) public signed;
+    mapping(address => bool) public voted;
     bool public paperCreated = false;
     uint256 public buyers = _tokenIdCounter.current();
     uint32 public upvotes = 0;
@@ -71,14 +72,19 @@ contract OpenPaper is ERC721, AccessControl {
         _safeMint(msg.sender, _tokenIdCounter.current());
     }
 
-    // TODO: If an address already voted, don't let them vote again
     function upvotePaper() public {
-        upvotes++;
+        if (!voted[msg.sender]) {
+            voted[msg.sender] = true;
+            upvotes++;
+        } else {
+            revert("You already voted");
+        }
     }
 
     function withdrawFunds() public onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 balance = address(this).balance;
         uint256 amount = balance / authors.length;
+
         for (uint64 i = 0; i < authors.length; i++) {
             (bool tranferTx,) = authors[i].call{value: amount}("");
             if (!tranferTx) {
