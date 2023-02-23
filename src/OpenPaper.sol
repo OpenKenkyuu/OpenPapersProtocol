@@ -6,11 +6,23 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 
+/// Errors
+error NotAllAuthorsSigned(string message);
+error PaperNotCreated(string message);
+error NotEnoughETHSent(string message);
+error TransferFailed(string message);
+error YouAlreadyVoted(string message);
+
 /// @custom:security-contact me@mariodev.xyz
 contract OpenPaper is ERC721, AccessControl {
     using Counters for Counters.Counter;
 
     Counters.Counter private _tokenIdCounter;
+
+    /// Events
+    event PaperCreated(address[] indexed authors);
+    event PaperBought(address indexed buyer, uint256 indexed tokenId);
+    event PaperUpvoted(address indexed voter, uint256 indexed tokenId);
 
     string public title;
     string private contentURI;
@@ -52,10 +64,10 @@ contract OpenPaper is ERC721, AccessControl {
     function createPaper() public onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
         // Only mint the token if all authors have signed
         for (uint64 i = 0; i < authors.length; i++) {
-            require(signed[authors[i]], "Not all authors have signed");
+            if (!signed[authors[i]]) {
+                revert NotAllAuthorsSigned("Not all authors have signed");
+            }
         }
-
-        // If all authors have signed, mint just one token to all authors
 
         for (uint64 i = 0; i < authors.length; i++) {
             if (balanceOf(authors[i]) == 0) {
@@ -63,21 +75,29 @@ contract OpenPaper is ERC721, AccessControl {
                 _tokenIdCounter.increment();
             }
         }
+        paperCreated = true;
+        emit PaperCreated(authors);
         return paperCreated;
     }
 
     function buyPaper() public payable {
-        require(createPaper(), "Paper not created");
-        require(msg.value >= paperPrice, "Not enough ETH sent");
-        _safeMint(msg.sender, _tokenIdCounter.current());
+        if (!paperCreated) {
+            revert PaperNotCreated("Paper not created");
+        } else if (msg.value < paperPrice) {
+            revert NotEnoughETHSent("Not enough ETH sent");
+        } else {
+            _safeMint(msg.sender, _tokenIdCounter.current());
+            emit PaperBought(msg.sender, _tokenIdCounter.current());
+        }
     }
 
     function upvotePaper() public {
-        if (!voted[msg.sender]) {
+        if (voted[msg.sender]) {
+            revert YouAlreadyVoted("You already voted");
+        } else {
             voted[msg.sender] = true;
             upvotes++;
-        } else {
-            revert("You already voted");
+            emit PaperUpvoted(msg.sender, _tokenIdCounter.current());
         }
     }
 
@@ -88,7 +108,7 @@ contract OpenPaper is ERC721, AccessControl {
         for (uint64 i = 0; i < authors.length; i++) {
             (bool tranferTx,) = authors[i].call{value: amount}("");
             if (!tranferTx) {
-                revert("Transfer failed");
+                revert TransferFailed("Transfer failed");
             }
         }
     }
