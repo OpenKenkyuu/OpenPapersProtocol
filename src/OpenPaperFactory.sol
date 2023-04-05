@@ -13,10 +13,7 @@ contract OpenPaperFactory {
         string[] memory categories,
         uint8 paperPrice,
         string memory contentURI
-    )
-        public
-        returns (address)
-    {
+    ) public returns (address) {
         address newPaper = address(new OpenPaper(title, authors, categories, paperPrice, contentURI));
         deployedPapers.push(newPaper);
         for (uint8 i = 0; i < authors.length; i++) {
@@ -31,7 +28,9 @@ contract OpenPaperFactory {
                 delete missingSignatures[i];
                 missingSignatures[i] = missingSignatures[missingSignatures.length - 1];
                 missingSignatures.pop();
+                return;
             }
         }
+        revert("Author not found in missingSignatures");
     }
 }

@@ -12,6 +12,8 @@ error PaperNotCreated(string message);
 error NotEnoughETHSent(string message);
 error TransferFailed(string message);
 error YouAlreadyVoted(string message);
+error YouAreTheOwner(string message);
+error NoAuthors(string message);
 
 /// @custom:security-contact me@mariodev.xyz
 contract OpenPaper is ERC721, AccessControl {
@@ -23,6 +25,7 @@ contract OpenPaper is ERC721, AccessControl {
     event PaperCreated(address[] indexed authors);
     event PaperBought(address indexed buyer, uint256 indexed tokenId);
     event PaperUpvoted(address indexed voter, uint256 indexed tokenId);
+    event Signed(address indexed signer);
 
     string public title;
     address[] public authors;
@@ -43,9 +46,7 @@ contract OpenPaper is ERC721, AccessControl {
         string[] memory _categories,
         uint8 _paperPrice,
         string memory _contentURI
-    )
-        ERC721("OpenPaper", "OPP")
-    {
+    ) ERC721("OpenPaper", "OPP") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         if (_authors.length != 0) {
@@ -67,10 +68,15 @@ contract OpenPaper is ERC721, AccessControl {
     }
 
     function sign() public onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!signed[msg.sender], "You have already signed");
         signed[msg.sender] = true;
+        emit Signed(msg.sender);
     }
 
     function createPaper() public onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
+        if (authors.length == 0) {
+            revert NoAuthors("No authors");
+        }
         // Only mint the token if all authors have signed
         for (uint8 i = 0; i < authors.length; i++) {
             if (!signed[authors[i]]) {
@@ -103,6 +109,8 @@ contract OpenPaper is ERC721, AccessControl {
     function upvotePaper() public {
         if (voted[msg.sender]) {
             revert YouAlreadyVoted("You already voted");
+        } else if (msg.sender == ownerOf(_tokenIdCounter.current())) {
+            revert YouAreTheOwner("You are the owner");
         } else {
             voted[msg.sender] = true;
             upvotes++;
@@ -123,8 +131,7 @@ contract OpenPaper is ERC721, AccessControl {
     }
 
     // The following functions are overrides required by Solidity.
-
-    function supportsInterface(bytes4 interfaceId) public view override (ERC721, AccessControl) returns (bool) {
+    function supportsInterface(bytes4 interfaceId) public view override(ERC721, AccessControl) returns (bool) {
         return super.supportsInterface(interfaceId);
     }
 }
